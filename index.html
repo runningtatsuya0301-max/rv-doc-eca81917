@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ランエボ 診断フローチャート（ビジュアル版 v1）</title>
+<style>
+  :root{
+    --bg1:#06101d; --bg2:#0c2138; --panel:#0d2239;
+    --cyan:#22d4ec; --cyan-d:#0e6f82; --cyan-glow:rgba(34,212,236,.55);
+    --green:#27d97f; --green-d:#12814a; --green-glow:rgba(39,217,127,.5);
+    --red:#ff5b5b; --red-d:#9e2727; --red-glow:rgba(255,91,91,.5);
+    --ink:#e9f6fb; --muted:#84acc1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink);
+    font-family:'Yu Gothic','YuGothic','Meiryo','Hiragino Kaku Gothic ProN',sans-serif;
+    background:
+      repeating-linear-gradient(0deg, rgba(34,212,236,.035) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(34,212,236,.035) 0 1px, transparent 1px 46px),
+      radial-gradient(1100px 650px at 12% 8%, #15355a 0%, transparent 60%),
+      linear-gradient(135deg, var(--bg1), var(--bg2));
+    background-attachment:fixed;
+    min-height:100vh; padding:28px 20px 60px;
+  }
+  /* ===== タブ ===== */
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;max-width:1180px;margin:0 auto 22px;}
+  .tab{
+    font-size:13px;font-weight:700;letter-spacing:.04em;cursor:pointer;
+    padding:9px 14px;border-radius:7px;color:var(--muted);
+    background:rgba(13,34,57,.7);border:1px solid rgba(34,212,236,.25);
+    transition:.15s;
+  }
+  .tab:hover{color:var(--ink);border-color:var(--cyan);}
+  .tab.active{color:#04121f;background:linear-gradient(180deg,#3fe2f7,#15aec6);
+    border-color:var(--cyan);box-shadow:0 0 14px var(--cyan-glow);}
+  .tab.draft::after{content:" ✏";opacity:.8;}
+  .tab.locked::after{content:" ✅";font-size:11px;}
+
+  .sheet{max-width:1180px;margin:0 auto;display:none;}
+  .sheet.active{display:block;}
+
+  /* ===== ヘッダー帯 ===== */
+  .head{
+    display:flex;align-items:center;gap:16px;margin-bottom:26px;
+    padding:14px 20px;border-radius:10px;
+    background:linear-gradient(90deg, rgba(34,212,236,.10), transparent);
+    border-left:4px solid var(--cyan);
+  }
+  .head .brand{font-size:12px;letter-spacing:.22em;color:var(--cyan);font-weight:700;}
+  .head h1{font-size:24px;margin:2px 0 0;font-weight:800;letter-spacing:.02em;
+    text-shadow:0 0 18px var(--cyan-glow);}
+  .head .status{margin-left:auto;font-size:11px;color:var(--muted);text-align:right;line-height:1.5;}
+  .badge-draft{color:#ffd166;font-weight:700;}
+
+  /* ===== 症状ボックス ===== */
+  .symptom-wrap{display:flex;justify-content:center;margin-bottom:6px;}
+  .symptom{
+    position:relative;padding:18px 40px;border-radius:8px;text-align:center;
+    background:linear-gradient(180deg,#0c2c45,#091d30);
+    border:2px solid var(--cyan);
+    box-shadow:0 0 22px var(--cyan-glow), inset 0 0 18px rgba(34,212,236,.12);
+  }
+  .symptom .lbl{font-size:11px;letter-spacing:.18em;color:var(--cyan);}
+  .symptom .name{font-size:22px;font-weight:800;margin-top:3px;text-shadow:0 0 14px var(--cyan-glow);}
+
+  .trunk{width:3px;height:26px;margin:0 auto;background:var(--cyan);
+    box-shadow:0 0 8px var(--cyan-glow);}
+
+  /* ===== ステージ（質問→結果） ===== */
+  .stage{
+    display:grid;grid-template-columns:340px 96px 1fr;align-items:center;
+    gap:0;margin:0 auto;max-width:1080px;
+  }
+  /* 六角形の質問ノード（二重枠でネオン縁） */
+  .q-outer{
+    filter:drop-shadow(0 0 8px var(--cyan-glow));
+    background:linear-gradient(180deg,#2bd7ef,#0f86a0);
+    clip-path:polygon(7% 0,93% 0,100% 50%,93% 100%,7% 100%,0 50%);
+    padding:2px;
+  }
+  .q-inner{
+    background:linear-gradient(180deg,#0e2945,#0a1c30);
+    clip-path:polygon(7% 0,93% 0,100% 50%,93% 100%,7% 100%,0 50%);
+    padding:20px 34px;text-align:center;
+  }
+  .q-inner .qn{font-size:12px;font-weight:800;color:var(--cyan);letter-spacing:.12em;}
+  .q-inner .qt{font-size:16px;font-weight:700;margin:5px 0 4px;line-height:1.45;}
+  .q-inner .qs{font-size:11px;color:var(--muted);}
+
+  /* YES 矢印 */
+  .yes{position:relative;height:3px;background:var(--green);box-shadow:0 0 8px var(--green-glow);}
+  .yes::after{content:"";position:absolute;right:-2px;top:-5px;border-left:11px solid var(--green);
+    border-top:7px solid transparent;border-bottom:7px solid transparent;}
+  .yes .ylbl{position:absolute;top:-24px;left:50%;transform:translateX(-50%);
+    font-size:14px;font-weight:800;color:var(--green);text-shadow:0 0 10px var(--green-glow);}
+
+  /* 結果（原因候補＋改善メニュー） */
+  .result{display:flex;flex-direction:column;gap:8px;}
+  .card{border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.08);}
+  .card .ch{font-size:12px;font-weight:800;letter-spacing:.08em;padding:5px 12px;display:flex;align-items:center;gap:8px;}
+  .card .cb{font-size:15px;font-weight:700;padding:9px 12px;background:rgba(8,20,33,.72);}
+  .cause .ch{background:linear-gradient(90deg,var(--red),var(--red-d));color:#fff;}
+  .cause{box-shadow:0 0 12px var(--red-glow);}
+  .fix .ch{background:linear-gradient(90deg,var(--green),var(--green-d));color:#04130a;}
+  .fix{box-shadow:0 0 12px var(--green-glow);}
+  /* ヘッダー右のミニバー装飾 */
+  .ch .meter{margin-left:auto;display:flex;gap:3px;}
+  .ch .meter i{width:14px;height:8px;border-radius:2px;background:rgba(255,255,255,.35);}
+
+  /* NO 矢印（下方向） */
+  .no{position:relative;width:3px;height:46px;margin:4px 0 4px 169px;
+    background:var(--red);box-shadow:0 0 8px var(--red-glow);}
+  .no::after{content:"";position:absolute;bottom:-2px;left:-5px;border-top:11px solid var(--red);
+    border-left:7px solid transparent;border-right:7px solid transparent;}
+  .no .nlbl{position:absolute;left:14px;top:12px;font-size:14px;font-weight:800;color:var(--red);
+    text-shadow:0 0 10px var(--red-glow);}
+
+  /* ターミナル（医療機関） */
+  .terminal{max-width:760px;margin:6px auto 0 0;margin-left:60px;
+    padding:14px 22px;border-radius:8px;display:flex;align-items:center;gap:12px;
+    background:linear-gradient(180deg,#241a0c,#1a1407);border:2px solid #ffb347;
+    box-shadow:0 0 18px rgba(255,179,71,.35);}
+  .terminal .ti{font-size:11px;letter-spacing:.16em;color:#ffb347;font-weight:700;}
+  .terminal .tt{font-size:16px;font-weight:800;margin-top:2px;}
+  .terminal .ico{font-size:26px;}
+  .terminal.danger{background:linear-gradient(180deg,#2c0c0c,#1a0606);border-color:var(--red);box-shadow:0 0 20px var(--red-glow);}
+  .terminal.danger .ti{color:var(--red);}
+  .alert{max-width:1080px;margin:0 auto 16px;padding:11px 18px;border-radius:8px;
+    background:linear-gradient(90deg,rgba(255,91,91,.20),rgba(255,91,91,.04));
+    border:1px solid var(--red);color:#ffd6d6;font-size:13.5px;font-weight:700;
+    display:flex;align-items:center;gap:10px;box-shadow:0 0 14px var(--red-glow);}
+  .alert .flag{font-size:18px;}
+  .q-outer.danger{background:linear-gradient(180deg,#ff6b6b,#a32424);filter:drop-shadow(0 0 9px var(--red-glow));}
+  .q-outer.danger .qn,.q-outer.danger .qt{color:#ffdede !important;}
+
+  .foot{max-width:1080px;margin:30px auto 0;font-size:12px;color:var(--muted);
+    border-top:1px solid rgba(34,212,236,.2);padding-top:12px;line-height:1.7;}
+  .foot b{color:var(--ink);}
+  .placeholder{padding:60px 20px;text-align:center;color:var(--muted);font-size:15px;line-height:1.9;}
+  .placeholder .big{font-size:20px;color:var(--ink);font-weight:800;margin-bottom:8px;}
+
+  /* ===== 上流→症状 逆引きマトリクス ===== */
+  .mtx-head{text-align:center;margin-bottom:20px;}
+  .mtx-head h1{font-size:25px;margin:0;text-shadow:0 0 16px var(--cyan-glow);}
+  .mtx-head p{font-size:13.5px;color:var(--muted);margin:9px 0 0;}
+  .mtx-head .err{color:var(--red);font-weight:800;}
+  .mtx-wrap{display:flex;align-items:center;gap:14px;justify-content:center;overflow-x:auto;max-width:100%;}
+  .yaxis{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;letter-spacing:.2em;color:var(--muted);font-weight:700;}
+  .xaxis-top{text-align:center;font-size:11px;letter-spacing:.18em;color:var(--muted);margin-bottom:7px;font-weight:700;}
+  table.matrix{border-collapse:separate;border-spacing:0;background:rgba(8,20,33,.55);margin:0 auto;}
+  table.matrix th,table.matrix td{border:1px solid rgba(34,212,236,.22);padding:9px 11px;text-align:center;}
+  table.matrix thead th,table.matrix tfoot th{font-size:12.5px;white-space:nowrap;}
+  .dot{width:21px;height:21px;}
+  .dot.big{width:28px;height:28px;}
+  table.matrix thead th,table.matrix tfoot th{background:rgba(13,34,57,.9);font-size:14px;font-weight:800;color:var(--ink);}
+  table.matrix tbody th{background:rgba(13,34,57,.7);text-align:left;font-weight:800;font-size:15px;white-space:nowrap;}
+  table.matrix th small{display:block;font-weight:500;font-size:11px;color:var(--muted);margin-top:2px;}
+  .dot{width:21px;height:21px;border-radius:50%;margin:0 auto;
+    background:radial-gradient(circle at 35% 30%,#ff9a9a,#cf322d 72%);
+    box-shadow:0 0 12px var(--red-glow), inset 0 0 5px rgba(255,255,255,.5);}
+  .dot.big{width:28px;height:28px;position:relative;box-shadow:0 0 20px var(--red), inset 0 0 6px rgba(255,255,255,.6);}
+  .dot.big::after{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid rgba(255,91,91,.55);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:.4;transform:scale(1);}50%{opacity:.9;transform:scale(1.08);}}
+  tr.row-hl th,tr.row-hl td{background:rgba(255,91,91,.13)!important;border-color:rgba(255,91,91,.55);}
+  .mtx-note{max-width:940px;margin:20px auto 0;padding:13px 20px;border-radius:8px;
+    background:linear-gradient(90deg,rgba(255,91,91,.17),transparent);border:1px solid var(--red);
+    color:#ffdada;font-size:15px;font-weight:700;box-shadow:0 0 14px var(--red-glow);
+    display:flex;align-items:center;gap:10px;line-height:1.5;}
+  .mtx-note b{color:#fff;}
+
+  @media(max-width:880px){
+    .stage{grid-template-columns:1fr;gap:8px;}
+    .yes{width:60%;margin:6px auto;} .no{margin-left:50%;}
+    .terminal{margin-left:auto;}
+  }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('s_matrix')">📊 上流→症状 逆引き</div>
+  <div class="tab locked" onclick="show('s_calf')">#1 ふくらはぎ</div>
+  <div class="tab locked" onclick="show('s_knee')">#2 膝</div>
+  <div class="tab locked" onclick="show('s_sole')">#3 足底</div>
+  <div class="tab locked" onclick="show('s_low')">#4 腰の違和感</div>
+  <div class="tab locked" onclick="show('s_shin')">#5 シンスプ</div>
+  <div class="tab draft" onclick="show('s_itbs')">#6 腸脛靭帯炎/ITBS</div>
+  <div class="tab draft" onclick="show('s_achilles')">#7 アキレス腱</div>
+  <div class="tab draft" onclick="show('s_hip')">#8 股関節</div>
+  <div class="tab draft" onclick="show('s_glute')">#9 お尻の奥</div>
+  <div class="tab draft" onclick="show('s_instep')">#10 足の甲</div>
+  <div class="tab draft" onclick="show('s_ham')">#11 太もも裏</div>
+  <div class="tab draft" onclick="show('s_kneeback')">#12 膝裏の張り</div>
+</div>
+
+<!-- ============ 上流→症状 逆引きマトリクス ============ -->
+<section class="sheet active" id="s_matrix">
+  <div class="mtx-head">
+    <h1>上流 → 症状の逆引き関係図（先回りチェック）</h1>
+    <p>※ 上流5項目の評価で<span class="err">【● エラー】</span>が出た際、引き起こされやすい症状（根本原因の可視化）</p>
+  </div>
+  <div class="xaxis-top">X-Axis（症状 / Columns）</div>
+  <div class="mtx-wrap">
+    <div class="yaxis">Y-Axis（上流エラー / Rows）</div>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th></th><th>ふくらはぎ</th><th>脛<small>シンスプ</small></th><th>膝</th><th>足底</th><th>腰</th>
+          <th>ITBS<small>膝外側</small></th><th>アキレス</th><th>股関節</th><th>お尻奥<small>梨状筋</small></th><th>足の甲</th><th>もも裏<small>ハム</small></th><th>膝裏</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th>前傾<small>腰折れ・直立等</small></th>
+          <td><div class="dot"></div></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td><div class="dot"></div></td>
+          <td><div class="dot"></div></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td></td><td><div class="dot"></div></td><td><div class="dot"></div></td>
+        </tr>
+        <tr>
+          <th>ケイデンス<small>160spm未満</small></th>
+          <td><div class="dot"></div></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td></td>
+          <td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td></td><td></td><td><div class="dot"></div></td><td><div class="dot"></div></td>
+        </tr>
+        <tr class="row-hl">
+          <th>接地<small>前すぎる・重い</small></th>
+          <td><div class="dot"></div></td><td><div class="dot"></div></td><td><div class="dot big"></div></td><td><div class="dot"></div></td><td><div class="dot big"></div></td>
+          <td><div class="dot"></div></td><td><div class="dot big"></div></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td><div class="dot big"></div></td><td><div class="dot"></div></td><td><div class="dot"></div></td>
+        </tr>
+        <tr>
+          <th>体幹<small>60秒未満・ブレ</small></th>
+          <td></td><td></td><td><div class="dot"></div></td><td></td><td><div class="dot"></div></td>
+          <td></td><td></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td><div class="dot"></div></td><td><div class="dot"></div></td>
+        </tr>
+        <tr>
+          <th>お尻<small>使えていない</small></th>
+          <td><div class="dot"></div></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td><div class="dot"></div></td>
+          <td><div class="dot"></div></td><td></td><td><div class="dot"></div></td><td><div class="dot"></div></td><td></td><td><div class="dot"></div></td><td><div class="dot"></div></td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <th></th><th>ふくらはぎ</th><th>脛</th><th>膝</th><th>足底</th><th>腰</th>
+          <th>ITBS</th><th>アキレス</th><th>股関節</th><th>お尻奥</th><th>足の甲</th><th>もも裏</th><th>膝裏</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="mtx-note"><span style="font-size:19px">💡</span><div>接地エラーは、全症状の原因になり得る<b>最大のボトルネック</b>。だから全症状に共通して「<b>真下接地・現状ピッチ+5-10%</b>」が効く＝ここが共通の効かせどころ。</div></div>
+
+  <div class="foot" style="max-width:1100px;">
+    <b>読み方</b>: 行（上流エラー）に🔴が出たら、その行に●がついた症状が出やすい。例: <b>お尻が使えていない → ふくらはぎ・膝・腰・ITBS・股関節・お尻の奥・もも裏・膝裏</b>に出やすい。<br>
+    → Week 0 で症状が出る<b>前に「先回り」</b>で指摘でき、信頼を獲得。サブスク → 90日プランへの動機にもなる。出典: <b>project_diagnostic_flowchart_v1.md §5.5</b><br>
+    ✏ 怪我系12症状に拡張（2026-05-29）。新7症状の上流マッピングは<b>鈴木さん医学監修待ち</b>。
+  </div>
+</section>
+
+<!-- ============ #6 ITBS ============ -->
+<section class="sheet" id="s_itbs">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>太もも〜膝の外側が痛い（腸脛靭帯炎 / ITBS）</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">太もも〜膝の外側が痛い</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <!-- Q1 -->
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner">
+      <div class="qn">Q1</div>
+      <div class="qt">お尻が弱く膝が内に入るか？</div>
+      <div class="qs">片足スクワットで膝内入り・FPPA過大</div>
+    </div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">中殿筋の弱さ・膝の内入り</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">中殿筋アクティベーション / Lateral Band Walk / クラム</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <!-- Q2 -->
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner">
+      <div class="qn">Q2</div>
+      <div class="qt">骨盤が落ちるか？</div>
+      <div class="qs">片足立ち30秒で反対の骨盤が落ちる</div>
+    </div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">股関節外転筋の弱さ（骨盤の落ち込み）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">中殿筋・大殿筋強化 / シングルレッグRDL</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <!-- Q3 -->
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner">
+      <div class="qn">Q3</div>
+      <div class="qt">オーバーストライドか？</div>
+      <div class="qs">接地点が骨盤より15cm以上前</div>
+    </div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">オーバーストライド・膝外側ストレス</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / 真下接地 / Aスキップ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <!-- Q4 -->
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner">
+      <div class="qn">Q4</div>
+      <div class="qt">距離・下り坂の急増か？</div>
+      <div class="qs">週増加率>10%・下り坂や同方向周回が多い</div>
+    </div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">走行距離・下り坂の急増</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">距離を前週110%以内 / 下り・同方向周回を一時減</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <!-- Q5 -->
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner">
+      <div class="qn">Q5</div>
+      <div class="qt">TFL・お尻の外側が硬いか？</div>
+      <div class="qs">触診で硬結・股関節内転ROM制限</div>
+    </div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">大腿筋膜張筋(TFL)・お尻外側の硬さ</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">TFL・大殿筋リリース / 股関節モビリティ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal">
+    <div class="ico">🏥</div>
+    <div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div>
+  </div>
+
+  <div class="foot">
+    ⚠ 腸脛靭帯そのものは強靭でストレッチでほぼ伸びない → <b>上流（お尻・股関節・TFL）への介入が定石</b>。<br>
+    <b>既往あり</b>（過去1年以内のITBS・膝・足首）の場合は <b>LSI（左右差）測定</b>を追加し、反対脚の中殿筋も評価。<br>
+    ✏ 本図は v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §11</b>
+  </div>
+</section>
+
+<!-- ============ 他症状（スタイル承認後に実装） ============ -->
+<section class="sheet" id="s_low">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>腰の違和感・痛み</h1>
+    </div>
+    <div class="status"><span style="color:#27d97f;font-weight:800">✅ 監修済</span><br>鈴木さん監修（2026-05-28）<br>§9</div>
+  </div>
+
+  <div class="alert"><span class="flag">🚩</span>強い痛み（VAS5+）・足への痺れ・放散痛 → <b style="margin:0 4px">ヘルニア／坐骨神経</b>の可能性。まず整形外科へ。</div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">腰の違和感・痛み</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">体幹のブレか？</div><div class="qs">プランク60秒未満・走行中に上半身がぐにゃぐにゃ</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">体幹のブレ（腰で支えている）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">体幹安定化（プランク / サイドプランク / Dead Bug）</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">反り腰走行か？</div><div class="qs">骨盤前傾過多・お尻突き出し</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">反り腰走行（骨盤前傾過多）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">骨盤後傾ドリル / Dead Bug / ヒップフレクサーストレッチ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">お尻・ハムの弱さか？</div><div class="qs">グルートブリッジで大臀筋より腰が先に張る（代償動作）</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">お尻・ハムの弱さ（腰での代償）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">グルートアクティベーション / RDL / ヒップヒンジ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">接地衝撃の突き抜けか？</div><div class="qs">GCT長い・上下動大・「ドスッ」音</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">接地衝撃が腰まで突き抜けている</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / 真下接地 / ポゴジャンプ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">既往（ヘルニア・坐骨神経痛・ぎっくり腰）か？</div><div class="qs">過去1年以内の腰の怪我・現在の痺れ/放散痛</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">既往あり（要医療分業）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">病院/整骨院との分業確認（放散痛は整形外科）・ランエボは走り起因要因＋補強のみ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    痛みのレベル次第（違和感VAS1-3なら走りながら改善・<b>強い痛みVAS5+や足への痺れは整形外科優先</b>）。腹筋（クランチ）でなく<b>体幹安定化（プランク・Dead Bug）</b>を選ぶ（腹筋運動は腰反りを誘発）。<br>
+    ✅ 監修済（2026-05-28 鈴木智仁）。出典: <b>project_diagnostic_flowchart_v1.md §9</b>
+  </div>
+</section>
+
+<!-- ============ #1 ふくらはぎ ============ -->
+<section class="sheet" id="s_calf">
+  <div class="head">
+    <div><div class="brand">RUN EVOLUTION ／ 診断フローチャート</div><h1>ふくらはぎが痛い</h1></div>
+    <div class="status"><span style="color:#27d97f;font-weight:800">✅ 監修済</span><br>鈴木さん監修（2026-05-28）<br>§6</div>
+  </div>
+  <div class="symptom-wrap"><div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">ふくらはぎが痛い</div></div></div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">オーバーストライドか？</div><div class="qs">接地点が骨盤より15cm以上前</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">オーバーストライド（前足が体より前で着地）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / その場ケンケン / Aスキップ / 真下接地</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">ふくらはぎ依存か？</div><div class="qs">グルートブリッジで大臀筋より腓腹筋が先に張る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ふくらはぎ依存（蹴り出しがふ＞お尻）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">グルートアクティベーション / クラム / ヒップヒンジ / 後ろへ押し切り</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">足首が硬いか？（背屈ROM不足）</div><div class="qs">壁向き背屈テストで足先〜壁が10cm未満</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">足首の硬さ（背屈ROM不足）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">Couch Stretch / 足首回し / ヒラメ筋ストレッチ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">接地時間が長いか？（GCT高め）</div><div class="qs">GCT 260ms超・「ドスッ」と重い接地音</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">接地時間が長い（GCT高め）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ポゴジャンプ / 接地時間短縮ドリル / 真下接地</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">シューズの問題か？</div><div class="qs">ソール内側偏摩耗・かかと潰れ</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">シューズの問題（摩耗パターン異常）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">シューズ推奨マトリクスで評価 → 履き替え提案</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    「真下接地＝進まない」は誤解（<b>前足はブレーキ係・後ろ足が推進</b>）。<b>アキレス・ふくらはぎ既往あり</b>はLSI（左右差）測定を追加。<br>
+    ✅ 監修済（2026-05-28 鈴木智仁）。出典: <b>project_diagnostic_flowchart_v1.md §6</b>
+  </div>
+</section>
+
+<!-- ============ #2 膝 ============ -->
+<section class="sheet" id="s_knee">
+  <div class="head">
+    <div><div class="brand">RUN EVOLUTION ／ 診断フローチャート</div><h1>膝が痛い</h1></div>
+    <div class="status"><span style="color:#27d97f;font-weight:800">✅ 監修済</span><br>鈴木さん監修（2026-05-28）<br>§7</div>
+  </div>
+  <div class="symptom-wrap"><div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">膝が痛い<span style="font-size:13px;color:#84acc1"> （お皿周り/外側/お皿下/奥/離地時）</span></div></div></div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">膝が内側に入るか？（FPPA過大）</div><div class="qs">スクワットで膝が内に入る・離地時に膝がつま先より内</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">膝が内側に入る（中殿筋の弱さ）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">中殿筋アクティベーション / Lateral Band Walk / クラム</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">大腿四頭筋に頼りすぎか？</div><div class="qs">ヒップヒンジでハムに乗らない・グルートブリッジで腿前/腰が先に張る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">大腿四頭筋優位・お尻ハム使えてない</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">RDL / グルートアクティベーション / ヒップヒンジ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">着地で膝を深く曲げすぎか？</div><div class="qs">接地時の膝屈曲>30度・ジャンパー的な重い接地</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">着地で膝を深く曲げすぎ</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ポゴジャンプ / 軽い着地練習 / 現状ピッチ+5-10%</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">着地衝撃が大きいか？</div><div class="qs">GCT 260ms超・上下動8cm超</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">着地衝撃が大きい（GCT長い・重心高い）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ピッチ上げ / 真下接地 / プライオ軽め</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">走行距離が急増したか？</div><div class="qs">週増加率>10%が3週連続 or 急に2倍化</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">走行距離急増（10%ルール超過）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">距離を前週110%以内に戻す / 強度落とす2週間（ACWR 1.0-1.2）</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    <b>膝は"被害者"であることが多い</b>（原因の8割は膝以外＝お尻・体幹）。整形外科で<b>レントゲン異常なし＝動きに問題ありの可能性</b>。サポーターは応急処置で根本解決にならない。<br>
+    ✅ 監修済（2026-05-28 鈴木智仁）。出典: <b>project_diagnostic_flowchart_v1.md §7</b>
+  </div>
+</section>
+
+<!-- ============ #3 足底 ============ -->
+<section class="sheet" id="s_sole">
+  <div class="head">
+    <div><div class="brand">RUN EVOLUTION ／ 診断フローチャート</div><h1>足底が痛い</h1></div>
+    <div class="status"><span style="color:#27d97f;font-weight:800">✅ 監修済</span><br>鈴木さん監修（2026-05-28）<br>§8</div>
+  </div>
+  <div class="symptom-wrap"><div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">足底が痛い<span style="font-size:13px;color:#84acc1"> （踵/土踏まず/前足部・朝/走り始め/走後）</span></div></div></div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">土踏まずが落ちてるか？（過剰回内）</div><div class="qs">ナビキュラドロップ>10mm・片足立ちで足首が内に倒れる</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">土踏まずが落ちてる（アーチ低下・過剰回内）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">タオルギャザー / ショートフット / カーフレイズ / サポート系シューズ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">ふくらはぎがカチカチか？</div><div class="qs">背屈ROM 10cm未満・朝の最初の一歩が痛い</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ふくらはぎがカチカチ（足底への張力増）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">Couch Stretch朝晩 / ふくらはぎリリース / ヒラメ筋ストレッチ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">着地衝撃が前足部に集中か？</div><div class="qs">「ドスッ」重い音・GCT 260ms超</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">着地衝撃が大きい（前足部で衝撃集中）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ミッドフット接地 / 現状ピッチ+5-10% / ポゴジャンプ軽め</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">シューズがへたってる・サイズ不適か？</div><div class="qs">走行500km超・偏摩耗・中敷きへたり</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">シューズへたり・サイズ不適</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">シューズ推奨マトリクスで評価 / 履き替え / 足型計測</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">急激な距離増・体重負荷か？</div><div class="qs">週増加率>10%が3週連続 / 1-3ヶ月で体重+3kg以上</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">急激な距離増・体重負荷</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">距離を前週110%以内 / クッション系シューズへ一時移行</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    <b>朝の一歩目が一番痛い</b>のは就寝中に足底筋膜が縮こまるから（寝る前のCouch Stretchが効く）。インソールは応急処置・<b>完全停止は逆効果</b>（ふくらはぎが固まり悪化）。<br>
+    ✅ 監修済（2026-05-28 鈴木智仁）。出典: <b>project_diagnostic_flowchart_v1.md §8</b>
+  </div>
+</section>
+
+<!-- ============ #5 シンスプリント ============ -->
+<section class="sheet" id="s_shin">
+  <div class="head">
+    <div><div class="brand">RUN EVOLUTION ／ 診断フローチャート</div><h1>シンスプリント（脛が痛い）</h1></div>
+    <div class="status"><span style="color:#27d97f;font-weight:800">✅ 監修済</span><br>鈴木さん監修（2026-05-28）<br>§10</div>
+  </div>
+  <div class="alert"><span class="flag">🚩</span>1点を押すと激痛・夜も痛む → <b style="margin:0 4px">疲労骨折</b>の可能性（シンスプは脛の内側の広範囲・休めば治まる）。整形外科でMRI推奨。</div>
+  <div class="symptom-wrap"><div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">脛が痛い（シンスプリント）</div></div></div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">土踏まずが落ちてるか？（過剰回内）</div><div class="qs">ナビキュラドロップ>10mm・片足立ちで足首内倒れ</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">土踏まずが落ちてる（過剰回内・足首内倒れ）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">足裏アーチ強化（タオルギャザー/ショートフット）/ サポート系シューズ / 内倒れ抑制</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">前のめりで着地（オーバーストライド）か？</div><div class="qs">接地点が骨盤より15cm以上前・脚が伸び切って接地</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">前のめりで着地（オーバーストライド）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / 真下接地 / Aスキップ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">ふくらはぎがカチカチか？</div><div class="qs">背屈ROM 10cm未満・足首回しの動き悪い</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ふくらはぎカチカチ（足首背屈不足を代償）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">Couch Stretch朝晩 / ふくらはぎリリース / 足首モビリティ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">走行距離が急増したか？</div><div class="qs">週増加率>10%が3週連続 or 急に2倍化</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">走行距離急増（10%ルール超過）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">距離を前週110%以内 / 強度落とす2週間（ACWR 1.0-1.2）</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">硬路面×クッション不足シューズか？</div><div class="qs">アスファルト100%・薄底レーシング・週4以上の高頻度</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">硬路面 × クッション不足シューズ</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">路面の多様化（土/トラック追加）/ クッション系シューズへ一時移行</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    🚩 <b>疲労骨折は1点を押すと激痛・夜も痛む</b>のが特徴。<b>シンスプは脛の内側の広範囲が痛い・休めば治まる</b>。判断つかなければ整形外科でMRI。90%は治るが進行前に手を打つ。<br>
+    ✅ 監修済（2026-05-28 鈴木智仁）。出典: <b>project_diagnostic_flowchart_v1.md §10</b>
+  </div>
+</section>
+<section class="sheet" id="s_achilles">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>アキレス腱が痛い</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">アキレス腱が痛い</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">ふくらはぎが硬い・背屈ROM不足か？</div><div class="qs">壁テストで背屈ROM&lt;10cm・朝のこわばり</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ふくらはぎ硬さ・背屈ROM不足</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">Couch Stretch / ふくらはぎリリース / 足首モビリティ ※付着部型は背屈控えめ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">ふくらはぎの筋力不足か？</div><div class="qs">片足カーフレイズ左右差・25回未満</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ふくらはぎ筋力不足（腱に負担集中）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">Alfredsonヒールドロップ（エキセントリック）/ カーフレイズ漸進</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">距離・スピード・坂練習の急増か？</div><div class="qs">週増加率&gt;10%・急に坂やスピード追加</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">距離・強度の急増</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">距離を前週110%以内 / 坂・スピードを一時減</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">オーバーストライド・前足部の強い接地か？</div><div class="qs">接地点が骨盤より前・「ドスッ」音</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">オーバーストライド・前足部強接地</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / 真下接地 / ミッドフット練習</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">シューズのドロップ急変か？</div><div class="qs">厚底→薄底・ヒール高が急に下がった</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">シューズのドロップ急変</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">元のドロップに戻す / 移行を緩やかに / シューズ推奨相談</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    ⚠ <b>中央型（腱の真ん中）と付着部型（踵骨付着部）で改善メニューが変わる</b>。付着部型は背屈ストレッチが圧迫で悪化することあり → 控えめに。<br>
+    <b>腫れ・しこり・きしみ音</b>がある場合は腱症の進行・部分断裂を否定するため整形外科へ。既往ありは <b>LSI測定＋カーフレイズ左右差</b>を追加。<br>
+    ✏ v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §12</b>
+  </div>
+</section>
+<section class="sheet" id="s_hip">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>股関節（前/外側）が痛い</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="alert"><span class="flag">🚩</span>鋭い痛み・引っかかり・つまり感・可動域で激痛 → <b style="margin:0 4px">FAI／関節唇損傷</b>の可能性。まず整形外科へ。</div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">股関節（前/外側）が痛い</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">腸腰筋・股関節屈筋の使いすぎ/硬さか？</div><div class="qs">Thomasテスト・鼠径部の張り（前側）</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">腸腰筋・股関節屈筋の硬さ（前側）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">腸腰筋ストレッチ（Couch Stretch）/ 骨盤後傾ドリル</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">お尻が弱く股関節で代償か？</div><div class="qs">片足立ちで骨盤が落ちる（外側）</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">大殿筋・中殿筋の弱さ（外側の代償）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">グルートアクティベーション / Lateral Band Walk / クラム</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">骨盤前傾過多・反り腰走行か？</div><div class="qs">立位で骨盤前傾15度超・走行中に腰が反る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">骨盤前傾過多（前面ストレス）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ヒップフレクサーストレッチ / Dead Bug / お腹意識</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">オーバーストライドか？</div><div class="qs">接地点が骨盤より前・接地で脚が伸び切る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">オーバーストライド（前面のつまり）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / 真下接地</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">股関節モビリティ不足か？</div><div class="qs">90/90ポジションで骨盤を倒せない</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">股関節モビリティ不足（可動域制限）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">股関節モビリティドリル / ヒップオープナー</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    🚩 <b>鋭い痛み・引っかかり・つまり感</b>は関節の中（FAI・関節唇損傷）の可能性 → 整形外科を先に。痛みのない弾発音（腱が骨を乗り越える音）は多くは問題なし。<br>
+    鼠径部の張りは <b>前もも・腸腰筋張り</b>（reference_quad_psoas_tightness_research）と併走チェック。<br>
+    ✏ v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §13</b>
+  </div>
+</section>
+<section class="sheet" id="s_glute">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>お尻の奥が痛い（梨状筋 / 坐骨）</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="alert"><span class="flag">🚩</span>足への痺れ・電気が走る痛み・放散痛 → <b style="margin:0 4px">坐骨神経／ヘルニア由来</b>の可能性。まず整形外科へ。</div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">お尻の奥が痛い</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">梨状筋の緊張か？</div><div class="qs">梨状筋触診・FAIRテストで再現痛（痺れなし）</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">梨状筋の緊張</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">梨状筋ストレッチ / お尻リリース / 股関節モビリティ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">お尻が弱く梨状筋が代償か？</div><div class="qs">グルートブリッジで大臀筋より外側が先に張る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">大殿筋・中殿筋の弱さ（梨状筋が代償）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">グルートアクティベーション / Lateral Band Walk</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">坐骨のハム付着部の張りか？</div><div class="qs">座ると痛い・坐骨結節に限局した圧痛</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">坐骨結節のハム付着部の張り（high hamstring）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ハム漸進的負荷（等尺→RDL）/ 過伸長ストレッチを避ける</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">骨盤の不安定・体幹弱化か？</div><div class="qs">プランク60秒で崩れる・走行中に骨盤がブレる</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">骨盤の不安定・体幹弱化</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">体幹安定化（プランク / Dead Bug）/ グルート</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">既往（坐骨神経痛・ヘルニア）か？</div><div class="qs">過去の腰・坐骨の怪我・現在の痺れ/放散痛</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">既往あり（要医療分業）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">病院/整骨院との分業確認・ランエボは走り起因要因のみ担当</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    🚩 <b>足への痺れ・放散痛</b>があれば坐骨神経の関与を疑い整形外科を先に。お尻だけの痛みで痺れがなければ梨状筋・お尻の筋肉が原因のことが多い。<br>
+    <b>坐骨結節の付着部炎</b>は過伸長ストレッチで悪化 → 等尺性収縮から段階的に。#11 太もも裏と併走チェック。<br>
+    ✏ v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §14</b>
+  </div>
+</section>
+<section class="sheet" id="s_instep">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>足の甲が痛い（疲労骨折スクリーニング）</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="alert"><span class="flag">🚩🚩</span>このフローは<b style="margin:0 4px">まず疲労骨折を否定</b>してから走り起因を診る。下のQ0で赤旗判定を最初に。</div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">足の甲が痛い</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <!-- 赤旗ゲート -->
+  <div class="stage">
+    <div class="q-outer danger"><div class="q-inner"><div class="qn">QO ／ 赤旗</div><div class="qt">1点圧痛・腫れ・夜間痛・hopで激痛か？</div><div class="qs">片足ジャンプで激痛・押すと飛び上がる・夜も痛む</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="terminal danger" style="margin:0"><div class="ico">🏥</div><div><div class="ti">中足骨疲労骨折の可能性</div><div class="tt">即・整形外科へ（レントゲン/MRI）・走行中止</div></div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">距離・強度の急増か？</div><div class="qs">週増加率&gt;10%が3週連続・急に2倍化</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">走行距離・強度の急増</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">距離を前週110%以内 / 強度を落とす2週間</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">靴紐の締めすぎ・甲の圧迫か？</div><div class="qs">甲に紐の圧迫痕・腱に沿った痛み・指への痺れ</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">靴紐の圧迫（腱鞘炎・神経圧迫）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">紐の通し方変更（痛む部位を避ける）/ シューズ見直し</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">過回内・内側列のストレスか？</div><div class="qs">ナビキュラドロップ&gt;10mm・シューズ内側偏摩耗</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">過回内 → 内側列のストレス</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">足裏アーチ強化（タオルギャザー/ショートフット）/ サポート系シューズ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">硬い前足部接地・衝撃の集中か？</div><div class="qs">「ドスッ」重い音・前足部から強く着地</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">前足部接地の衝撃集中</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ミッドフット接地 / 現状ピッチ+5-10% / クッション系シューズ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    🚩🚩 <b>1点圧痛・腫れ・夜間痛・hop testで激痛</b>は中足骨疲労骨折の可能性 → 湿布で様子見せず即整形外科（初期はレントゲンに写らずMRIが要ることも）。<br>
+    疲労骨折既往ありは再発リスク高・距離増加率10%ルール厳守・<b>エネルギー不足/RED-S</b>の確認も。<br>
+    ✏ v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §15</b>
+  </div>
+</section>
+<section class="sheet" id="s_ham">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>太もも裏が張る（ハムストリングス / 肉離れ後）</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="alert"><span class="flag">🚩</span>走行中に突然ブチッ・強い痛みで走れない・内出血 → <b style="margin:0 4px">急性肉離れ</b>。RICE＋整形外科を先に（本フローは治った後の張り・再発予防）。</div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">太もも裏が張る</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">ハム肉離れ既往・再発リスクか？</div><div class="qs">患側の柔軟性/筋力が健側より低い（再発率12-31%）</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ハム肉離れ既往の左右差・瘢痕</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">Nordicカール（エキセントリック）/ 漸進的スピード復帰</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">骨盤前傾過多か？</div><div class="qs">ハムが常時引き伸ばされる・反り腰走行</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">骨盤前傾過多（ハム常時伸長）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">骨盤後傾ドリル（キャットカウ）/ Dead Bug / お腹意識</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">お尻が使えずハム優位か？</div><div class="qs">グルートブリッジで大臀筋よりハムが先に張る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">大殿筋使えず・ハム優位（お尻起動不全）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">グルートアクティベーション / ヒップヒンジ / RDL</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">オーバーストライドか？</div><div class="qs">接地直前のハム遠心性負荷増・脚が伸び切って接地</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">オーバーストライド（遠心性負荷増）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">現状ピッチ+5-10% / 真下接地</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">スプリント/スピード練習の急増か？</div><div class="qs">急にインターバル/坂ダッシュ追加・WU不足</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">スピード練習の急増</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">スピード練習を段階的に / WUの質を上げる</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    ⚠ <b>伸ばすだけは再発のもと</b>。ハム再発率は12-31%と高く、<b>Nordicカール（エキセントリック）</b>が再発予防エビデンス最強。<br>
+    速く走るほど接地直前にハムが急ブレーキ的に働く（遠心性収縮）→ 段階的にスピードを戻す。坐骨付近の痛みは #9 お尻の奥と併走チェック。<br>
+    ✏ v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §16</b>
+  </div>
+</section>
+
+<!-- ============ #12 膝裏の張り ============ -->
+<section class="sheet" id="s_kneeback">
+  <div class="head">
+    <div>
+      <div class="brand">RUN EVOLUTION ／ 診断フローチャート</div>
+      <h1>膝裏が張る・伸びない（膝窩部）</h1>
+    </div>
+    <div class="status"><span class="badge-draft">✏ v2.1 ドラフト</span><br>鈴木さん医学監修待ち<br>2026-05-29</div>
+  </div>
+
+  <div class="alert"><span class="flag">🚩</span>膝裏の腫れ・しこり・ふくらはぎの腫れを伴う痛み → <b style="margin:0 4px">ベーカー嚢腫／血栓（DVT）</b>の可能性。まず整形外科へ。</div>
+
+  <div class="symptom-wrap">
+    <div class="symptom"><div class="lbl">SYMPTOM</div><div class="name">膝裏が張る・伸びない</div></div>
+  </div>
+  <div class="trunk"></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q1</div><div class="qt">ハムの硬さ・膝裏付着部の張りか？</div><div class="qs">Active Knee Extension/SLR制限・付着部に張り</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">ハム硬さ・膝裏付着部の張り</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">ハム漸進負荷（過伸長は避ける）/ お尻起動 / 段階的ストレッチ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q2</div><div class="qt">腓腹筋（ふくらはぎ上部）の硬さか？</div><div class="qs">膝伸展位での背屈ROM制限・上部ガチガチ</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">腓腹筋の硬さ（膝裏付着部）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">腓腹筋ストレッチ（膝伸ばして）/ リリース / 足首モビリティ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q3</div><div class="qt">膝の過伸展（反張膝）か？</div><div class="qs">立位で膝が後方に反る・接地で伸び切る</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">膝の過伸展（反張膝）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">軽く膝を緩める接地 / 大腿四頭筋・ハム共収縮 / 現状ピッチ+5-10%</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q4</div><div class="qt">骨盤前傾でハムが常時伸長か？</div><div class="qs">立位で骨盤前傾15度超・反り腰走行</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">骨盤前傾過多（ハム常時伸長）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">骨盤後傾ドリル / グルート起動 / Dead Bug</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q5</div><div class="qt">膝窩筋（膝裏深層）の過活動・腱炎か？</div><div class="qs">膝後外側の圧痛・過回内・下り坂で悪化</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">膝窩筋の過活動・腱炎（膝のロックを外す深層筋）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">過回内コントロール（足アーチ強化）/ 膝窩筋リリース / 下り坂を一時減</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="stage">
+    <div class="q-outer"><div class="q-inner"><div class="qn">Q6</div><div class="qt">既往・腫れ（ベーカー嚢腫・血栓）か？</div><div class="qs">膝裏の腫れ/しこり・ふくらはぎ腫脹・過去の膝怪我</div></div></div>
+    <div class="yes"><span class="ylbl">YES</span></div>
+    <div class="result">
+      <div class="card cause"><div class="ch">原因候補<span class="meter"><i></i><i></i><i></i></span></div><div class="cb">既往・腫れ（要医療分業）</div></div>
+      <div class="card fix"><div class="ch">改善メニュー</div><div class="cb">整形外科紹介（ベーカー嚢腫/DVT除外）・ランエボは走り起因要因のみ</div></div>
+    </div>
+  </div>
+  <div class="no"><span class="nlbl">NO</span></div>
+
+  <div class="terminal"><div class="ico">🏥</div><div><div class="ti">走り起因以外の可能性</div><div class="tt">整形外科などの医療機関を推奨</div></div></div>
+
+  <div class="foot">
+    ⚠ <b>膝窩筋（popliteus）は膝のロックを外す深層筋</b>。下腿の内旋・過回内の制御に関わり、下り坂・過回内ランナーで腱炎を起こし膝後外側に痛みが出る → 足アーチ・接地の改善が根本対処。<br>
+    ハム付着部が原因なら<b>過伸長ストレッチは逆効果</b>（段階的負荷で）。膝裏の腫れ/しこり・ふくらはぎ腫脹は整形外科（ベーカー嚢腫・血栓除外）。#11 太もも裏と併走。<br>
+    ✏ v2.1 ドラフト（2026-05-29 Claude作成・鈴木さん医学監修待ち）。出典: <b>project_diagnostic_flowchart_v1.md §17</b>
+  </div>
+</section>
+
+<script>
+  function show(id){
+    document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+</script>
+</body>
+</html>
